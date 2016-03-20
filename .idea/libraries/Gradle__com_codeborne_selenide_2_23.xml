@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="Gradle: com.codeborne:selenide:2.23">
+    <CLASSES>
+      <root url="jar://$MAVEN_REPOSITORY$/com/codeborne/selenide/2.23/selenide-2.23.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
