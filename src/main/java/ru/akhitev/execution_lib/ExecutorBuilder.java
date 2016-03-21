@@ -3,31 +3,39 @@ package ru.akhitev.execution_lib;
 import org.slf4j.Logger;
 
 import java.io.IOException;
-import java.util.List;
+import java.util.Queue;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Comparator;
 
 /**
  * Cтроитель исполнителя.
  */
-public abstract class ExecutorBuilder {
-    protected static final Logger LOGGER = org.slf4j.LoggerFactory.getLogger(ExecutorBuilder.class);
+public final class ExecutorBuilder {
+    private static final Logger LOGGER = org.slf4j.LoggerFactory.getLogger(ExecutorBuilder.class);
 
-    protected Regimes regime;
+    private final ExecBuilderStrategy strategy;
 
-    protected Executor executor;
+    private Regimes regime;
 
-    protected OperationAppender beforeAppender;
+    private final Executor executor;
 
-    protected OperationAppender mainAppender;
+    private OperationAppender beforeAppender;
 
-    protected OperationAppender afterAppender;
+    private OperationAppender mainAppender;
 
-    protected Object executorData;
+    private OperationAppender afterAppender;
 
-    protected ExecutorBuilder(Object executorData) {
+    private final Object executorData;
+
+    private ExecutorBuilder(final Object executorData, final ExecBuilderStrategy strategy) {
         executor = ExecutorImpl.newInstance();
         this.executorData = executorData;
+	this.strategy = strategy;
+    }
+
+    public static final ExecutorBuilder newInstance(Object executorData, final ExecBuilderStrategy strategy) {
+        return new ExecutorBuilder(executorData, strategy);
     }
 
     public ExecutorBuilder before(OperationAppender beforeAppender){
@@ -60,18 +68,13 @@ public abstract class ExecutorBuilder {
                 executeOnBuildError();
                 return Optional.empty();
             }
-            final List<Properties> xlsProperties = getDataFromExcel();
+            final Queue<Properties> xlsProperties = getDataFromExcel();
             if (xlsProperties.size() < 1) {
                 executeOnBuildError();
                 return Optional.empty();
             }
             beforeAppender.append(executor, null);
             xlsProperties.stream()
-                    .sorted((p1, p2) -> {
-                        final long n1 = convertStringToLong(p1.getProperty(getExcelColumnNameForSort().toUpperCase()));
-                        final long n2 = convertStringToLong(p2.getProperty(getExcelColumnNameForSort().toUpperCase()));
-                        return Long.compare(n1, n2);
-                    })
                     .forEach(properties -> {
                         mainAppender.append(executor, properties);
                     });
@@ -105,20 +108,30 @@ public abstract class ExecutorBuilder {
         return this;
     }
 
-
-    protected abstract void executeBeforeBuild();
+    /** Вызывается в самом начале выполнения {@link #before} */
+    private void executeBeforeBuild() {
+        strategy.executeBeforeBuild(executorData);
+    }
 
     /** Вызывается при ошибке валидации и при ошибке данных в excel. */
-    protected abstract void executeOnBuildError();
+    private void executeOnBuildError() {
+        strategy.executeOnError(executorData);
+    }
 
     /** Проверка входных. Данных, логин и пароль входа на сайт. */
-    protected abstract boolean isWrongInput();
+    private boolean isWrongInput() {
+        return strategy.isIncorrectInput(executorData);
+    }
 
     /** Преобразование данных из excel.*/
-    protected abstract List<Properties> getDataFromExcel() throws IOException;
+    private Queue<Properties> getDataFromExcel() throws IOException {
+        return strategy.getDataFromExcel(executorData, getExcelComparator());
+    }
 
     /** Поле, по которому будет построена сортировка из таблицы excel. */
-    protected abstract String getExcelColumnNameForSort();
+    private Comparator getExcelComparator() {
+         return strategy.getExcelComparator(executorData);
+    }
 
     public enum Regimes {
         WITHOUT_OUTSOURCE,
